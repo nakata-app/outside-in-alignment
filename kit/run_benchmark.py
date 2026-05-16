@@ -30,7 +30,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -489,7 +489,7 @@ def run_benchmark(
         "n_tasks": len(tasks),
         "n_rows": len(rows),
         "elapsed_seconds": round(elapsed_s, 1),
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     (out_dir / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
@@ -596,7 +596,7 @@ def main() -> int:
     if not (args.smoke or args.full):
         ap.error("specify --smoke or --full")
 
-    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = RUNS_DIR / ts
     run_benchmark(
         n_repeats=args.n,
