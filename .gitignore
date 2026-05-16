@@ -1,0 +1,11 @@
+# Local-only personal source materials, never pushed.
+docs/raw/
+*.local.md
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+benchmark/runs/
+benchmark/*.csv
+!benchmark/sample.csv
