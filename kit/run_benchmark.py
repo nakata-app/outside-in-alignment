@@ -510,48 +510,80 @@ def _csv_safe(v) -> str:
 
 
 def aggregate(rows: list[dict], tasks: list[dict]) -> dict:
-    by_cond_cat: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
+    """Per-task-mean aggregation. Each task contributes equal weight.
+
+    Paired stats are computed across tasks (not across raw rows), pairing
+    each task's per-condition mean. This matches the benchmark's unit of
+    analysis (the task) and survives missing/failed runs.
+    """
+    # Group raw rows by (task_id, condition) and by category.
+    by_tc: dict[tuple[str, str], list[int]] = defaultdict(list)
+    cat_by_task: dict[str, str] = {}
     brier_pairs: dict[str, list[tuple[float, int]]] = defaultdict(list)
 
     for r in rows:
         passed = 1 if r["passed"] else 0
-        by_cond_cat[r["condition"]][r["category"]].append(passed)
-        if r["category"] == "calibration" and r["confidence_stated"] is not None:
+        by_tc[(r["task_id"], r["condition"])].append(passed)
+        cat_by_task[r["task_id"]] = r["category"]
+        if r["category"] == "calibration" and r.get("confidence_stated") is not None:
             brier_pairs[r["condition"]].append((r["confidence_stated"], passed))
 
-    pass_rates: dict[str, dict[str, float]] = {}
-    for cond, by_cat in by_cond_cat.items():
-        pass_rates[cond] = {}
-        for cat, vals in by_cat.items():
+    # Per-task mean per condition.
+    task_ids = sorted(cat_by_task.keys())
+    conditions = sorted({c for (_, c) in by_tc.keys()})
+
+    task_means: dict[str, dict[str, float]] = {}
+    for tid in task_ids:
+        task_means[tid] = {}
+        for cond in conditions:
+            vals = by_tc.get((tid, cond), [])
+            if vals:
+                task_means[tid][cond] = statistics.mean(vals)
+
+    # Pass rates per (condition, category) as MEAN OF TASK MEANS.
+    pass_rates: dict[str, dict[str, float]] = defaultdict(dict)
+    for cond in conditions:
+        cat_buckets: dict[str, list[float]] = defaultdict(list)
+        for tid in task_ids:
+            if cond in task_means.get(tid, {}):
+                cat_buckets[cat_by_task[tid]].append(task_means[tid][cond])
+        for cat, vals in cat_buckets.items():
             pass_rates[cond][cat] = statistics.mean(vals) if vals else 0.0
 
     brier: dict[str, float | None] = {
         cond: brier_score(pairs) for cond, pairs in brier_pairs.items()
     }
 
-    # Pairwise paired_t between oia-on and oia-off (and control) per category.
-    stats = {}
+    # Paired stats: per category, vectors of per-task means.
+    stats: dict[str, dict] = {}
     for category in ["hallucination", "sycophancy", "calibration"]:
         stats[category] = {}
-        if "oia-on" in by_cond_cat and "oia-off" in by_cond_cat:
-            a = [float(x) for x in by_cond_cat["oia-on"].get(category, [])]
-            b = [float(x) for x in by_cond_cat["oia-off"].get(category, [])]
-            if len(a) == len(b) and len(a) >= 2:
+        cat_tasks = [t for t in task_ids if cat_by_task[t] == category]
+        for label_a, label_b in [("oia-on", "oia-off"), ("oia-on", "oia-control")]:
+            a, b = [], []
+            for tid in cat_tasks:
+                ma = task_means.get(tid, {}).get(label_a)
+                mb = task_means.get(tid, {}).get(label_b)
+                if ma is not None and mb is not None:
+                    a.append(ma); b.append(mb)
+            if len(a) >= 2:
                 t, p = paired_t_test(a, b)
                 d = cohens_d_paired(a, b)
-                stats[category]["on_vs_off"] = {"t": t, "p_two_sided": p, "cohens_d": d}
-        if "oia-on" in by_cond_cat and "oia-control" in by_cond_cat:
-            a = [float(x) for x in by_cond_cat["oia-on"].get(category, [])]
-            b = [float(x) for x in by_cond_cat["oia-control"].get(category, [])]
-            if len(a) == len(b) and len(a) >= 2:
-                t, p = paired_t_test(a, b)
-                d = cohens_d_paired(a, b)
-                stats[category]["on_vs_control"] = {"t": t, "p_two_sided": p, "cohens_d": d}
+                key = f"{label_a}_vs_{label_b.split('-')[1]}"
+                stats[category][key] = {
+                    "n_tasks": len(a),
+                    "mean_a": round(statistics.mean(a), 4),
+                    "mean_b": round(statistics.mean(b), 4),
+                    "delta": round(statistics.mean(a) - statistics.mean(b), 4),
+                    "t": None if t is None else round(t, 3),
+                    "p_two_sided": None if p is None else round(p, 4),
+                    "cohens_d": None if d is None else round(d, 3),
+                }
 
     return {
-        "pass_rates_by_condition_and_category": pass_rates,
+        "pass_rates_by_condition_and_category": dict(pass_rates),
         "brier_calibration_by_condition": brier,
-        "paired_stats_on_vs_off_and_control": stats,
+        "paired_stats": stats,
     }
 
 
@@ -569,12 +601,11 @@ def print_summary(summary: dict) -> None:
     print("\n=== BRIER (calibration only, lower=better) ===")
     for cond, b in summary["brier_calibration_by_condition"].items():
         print(f"  {cond:<14} {b if b is None else f'{b:.4f}'}")
-    print("\n=== PAIRED STATS (on vs off) ===")
-    for cat, st in summary["paired_stats_on_vs_off_and_control"].items():
-        sub = st.get("on_vs_off")
-        if sub:
-            t = sub["t"]; p = sub["p_two_sided"]; d = sub["cohens_d"]
-            print(f"  {cat:<14} t={t:.3f}  p~{p:.4f}  d={d:.3f}")
+    print("\n=== PAIRED STATS (per-task means) ===")
+    print(f"  {'category':<14}{'comparison':<22}{'Δ':<10}{'t':<8}{'p':<10}{'d':<8}{'n':<5}")
+    for cat, st in summary["paired_stats"].items():
+        for key, sub in st.items():
+            print(f"  {cat:<14}{key:<22}{sub['delta']:<+10.3f}{sub['t']:<8}{sub['p_two_sided']:<10}{sub['cohens_d']:<8}{sub['n_tasks']:<5}")
 
 
 # ----------------------------- main ---------------------------------------- #
