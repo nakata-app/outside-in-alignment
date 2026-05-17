@@ -2,7 +2,7 @@
 
 > An operator-side discipline layer for LLMs. Closes four architectural gaps that in-model alignment alone cannot reach: calibration, memory, sycophancy, and action-feedback.
 
-**Status: v0.1, pre-benchmark.** The thesis is stated. The numbers are not yet in. This README will be updated when `benchmark/benchmark-v0.1.md` produces data.
+**Status: v0.1 results published, v0.2 ablation in progress.** v0.1 benchmark (75 tasks × 3 conditions × 3 reps on Llama-3.3-70B) was trend-positive on 5 of 6 comparisons but underpowered for statistical confirmation; 1 comparison reached p<0.05 (calibration vs length-matched control). A v0.2 constitution (67 lines, -55% vs v0.1) and 4-way ablation (`off / on-v01 / on-v02 / control`) are currently running. See [`benchmark/benchmark-v0.1.md`](benchmark/benchmark-v0.1.md) for the v0.1 honest results and [`paper/oia-v01-paper.md`](paper/oia-v01-paper.md) for the working paper.
 
 ---
 
@@ -28,13 +28,26 @@ Read [`CONSTITUTION_v0.1.md`](CONSTITUTION_v0.1.md) for the full rule set, [`doc
 ## Repository map
 
 ```
-CONSTITUTION_v0.1.md   The rule set, drop into any LLM system prompt.
+CONSTITUTION_v0.1.md     The original rule set (149 lines).
+CONSTITUTION_v0.2.md     The trimmed rule set (67 lines). Default for `oia init`.
 docs/MANIFESTO_draft.md  The argument behind the rules.
-spec/four-pillars.md   Per-pillar implementation spec.
-benchmark/             A/B harness, task set, and results. v0.1 in preparation.
-kit/                   CLI tool to install the constitution into any project. v0.1 in preparation.
-paper/                 Technical report, arXiv-style. v0.1 in preparation.
+spec/four-pillars.md     Per-pillar implementation spec.
+benchmark/               A/B harness, 225 tasks, results. v0.1 published, v0.2 in progress.
+kit/                     CLI (`oia init / version / eval / uninstall`) + benchmark harness.
+paper/                   Technical report, arXiv-style. v0.1 working draft.
+pyproject.toml           pipx-ready packaging.
 ```
+
+## Quick install
+
+```bash
+git clone <repo>
+cd outside-in-alignment
+pipx install .
+oia init /path/to/your/project   # writes CLAUDE.md + .oia/ into target
+```
+
+Then start an LLM session in the target project; the constitution is loaded as the system prompt automatically (for Claude Code) or via the `.oia/CONSTITUTION.md` file (for other harnesses).
 
 ---
 
@@ -57,7 +70,9 @@ For each of three task categories, run the same model, the same parameters, the 
 
 Targets for v0.1: statistically significant difference on all three metrics, with hallucination and sycophancy reductions of at least one standard deviation.
 
-If the benchmark fails to show benefit, the thesis is wrong in its current form and will be revised or withdrawn.
+**v0.1 result (honest):** 5 of 6 comparisons trend-positive, 1 of 6 reached p<0.05. Observed effect size d≈0.2-0.4, below the d≥0.5 pre-registered detection threshold. Power was insufficient (n=25/category). A length-matched filler control consistently underperformed both OIA and baseline, validating the control design. A constitution-length confusion was identified as the cause of v0.1 hallucination regressions, leading to a v0.2 constitution at 67 lines (vs 149 in v0.1). v0.2 ablation in progress.
+
+If subsequent benchmarks fail to show benefit, the thesis is wrong in its current form and will be revised or withdrawn under the same constitution we propose.
 
 ---
 
