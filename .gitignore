@@ -1,6 +1,8 @@
 # Local-only personal source materials, never pushed.
 docs/raw/
 *.local.md
+*.tmpbak
+*.bak
 .DS_Store
 __pycache__/
 *.pyc
@@ -9,3 +11,6 @@ node_modules/
 benchmark/runs/
 benchmark/*.csv
 !benchmark/sample.csv
+dist/
+build/
+*.egg-info/

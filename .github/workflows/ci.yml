@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    name: Smoke tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Validate task JSONL files
+        run: |
+          python3 -c "
+          import json, sys, pathlib
+          bad = 0
+          for path in pathlib.Path('benchmark/tasks').glob('*.jsonl'):
+              for i, line in enumerate(path.read_text().splitlines(), 1):
+                  line = line.strip()
+                  if not line:
+                      continue
+                  try:
+                      d = json.loads(line)
+                      assert 'id' in d and 'category' in d and 'prompt' in d and 'scorer' in d
+                  except Exception as e:
+                      print(f'{path}:{i}: {e}')
+                      bad += 1
+          sys.exit(1 if bad else 0)
+          "
+
+      - name: Constitution files exist
+        run: |
+          test -f CONSTITUTION_v0.1.md
+          test -f CONSTITUTION_v0.2.md
+          test $(wc -l < CONSTITUTION_v0.2.md) -lt 100
+
+      - name: Harness imports cleanly
+        run: |
+          python3 -c "import sys; sys.path.insert(0, 'kit'); import run_benchmark; import oia; print('imports OK')"
+
+      - name: CLI version command works
+        run: |
+          python3 kit/oia.py version
+
+      - name: CLI init / uninstall round-trip
+        run: |
+          mkdir -p /tmp/ci_oia_test
+          python3 kit/oia.py init /tmp/ci_oia_test
+          test -f /tmp/ci_oia_test/CLAUDE.md
+          test -f /tmp/ci_oia_test/.oia/CONSTITUTION.md
+          python3 kit/oia.py uninstall /tmp/ci_oia_test
+          test ! -f /tmp/ci_oia_test/CLAUDE.md
+          test ! -d /tmp/ci_oia_test/.oia
+
+      - name: pyproject is valid
+        run: |
+          python3 -c "import tomllib; tomllib.load(open('pyproject.toml','rb'))"
+
+      - name: Package builds
+        run: |
+          python3 -m pip install --upgrade build
+          python3 -m build --wheel --sdist
+          ls -la dist/
+
+  leak-check:
+    name: Leak / secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan tracked files for common secret patterns
+        run: |
+          # API key prefixes, password assignments, long base64 keys.
+          ! git grep -nE 'sk_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|ghp_[A-Za-z0-9]{30,}|nvapi-[A-Za-z0-9]{30,}' -- ':!*.md'
+          ! git grep -nE 'password\s*=\s*["\047][^"\047]{6,}|api_key\s*=\s*["\047][^"\047]{15,}' -- ':!*.md'
+
+      - name: No backup or local-only files committed
+        run: |
+          ! git ls-files | grep -E '\.bak$|\.tmpbak$|\.local\.md$|\.DS_Store'
