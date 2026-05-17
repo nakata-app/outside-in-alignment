@@ -35,7 +35,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TASKS_DIR = REPO_ROOT / "benchmark" / "tasks"
-CONSTITUTION_PATH = REPO_ROOT / "CONSTITUTION_v0.1.md"
+CONSTITUTION_V01_PATH = REPO_ROOT / "CONSTITUTION_v0.1.md"
+CONSTITUTION_V02_PATH = REPO_ROOT / "CONSTITUTION_v0.2.md"
 RUNS_DIR = REPO_ROOT / "benchmark" / "runs"
 
 NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
@@ -60,8 +61,8 @@ def load_tasks(tasks_dir: Path) -> list[dict]:
     return tasks
 
 
-def load_constitution() -> str:
-    return CONSTITUTION_PATH.read_text(encoding="utf-8")
+def load_constitution(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
 
 
 def build_filler(target_chars: int) -> str:
@@ -345,14 +346,20 @@ def score_task(output: str, task: dict, judge_model: str) -> tuple[bool, str]:
 # ----------------------------- conditions ---------------------------------- #
 
 
-def build_system_prompts() -> dict[str, str | None]:
-    constitution = load_constitution()
-    filler = build_filler(len(constitution))
-    return {
-        "oia-off": None,
-        "oia-on": constitution,
-        "oia-control": filler,
-    }
+def build_system_prompts(include_v01: bool = True, include_v02: bool = False) -> dict[str, str | None]:
+    prompts: dict[str, str | None] = {"oia-off": None}
+    max_len = 0
+    if include_v01:
+        c01 = load_constitution(CONSTITUTION_V01_PATH)
+        prompts["oia-on-v01"] = c01
+        max_len = max(max_len, len(c01))
+    if include_v02:
+        c02 = load_constitution(CONSTITUTION_V02_PATH)
+        prompts["oia-on-v02"] = c02
+        max_len = max(max_len, len(c02))
+    if max_len > 0:
+        prompts["oia-control"] = build_filler(max_len)
+    return prompts
 
 
 # ----------------------------- statistics ---------------------------------- #
@@ -402,6 +409,8 @@ def run_benchmark(
     judge_model: str,
     out_dir: Path,
     smoke: bool,
+    include_v01: bool = True,
+    include_v02: bool = False,
 ) -> None:
     tasks = load_tasks(TASKS_DIR)
     if tasks_limit is not None:
@@ -414,7 +423,8 @@ def run_benchmark(
         ]
         n_repeats = 1
 
-    system_prompts = build_system_prompts()
+    system_prompts = build_system_prompts(include_v01=include_v01, include_v02=include_v02)
+    print(f"Conditions: {list(system_prompts.keys())}")
     out_dir.mkdir(parents=True, exist_ok=True)
     raw_dir = out_dir / "raw"
     raw_dir.mkdir(exist_ok=True)
@@ -622,6 +632,8 @@ def main() -> int:
                     help="Max tasks (for partial runs)")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--judge-model", default=DEFAULT_MODEL)
+    ap.add_argument("--no-v01", action="store_true", help="Skip oia-on-v01 condition")
+    ap.add_argument("--with-v02", action="store_true", help="Add oia-on-v02 condition (CONSTITUTION_v0.2.md)")
     args = ap.parse_args()
 
     if not (args.smoke or args.full):
@@ -636,6 +648,8 @@ def main() -> int:
         judge_model=args.judge_model,
         out_dir=out_dir,
         smoke=args.smoke,
+        include_v01=not args.no_v01,
+        include_v02=args.with_v02,
     )
     return 0
 
