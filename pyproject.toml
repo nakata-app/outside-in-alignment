@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "outside-in-alignment"
+version = "0.1.0"
+description = "Operator-side discipline layer for LLMs. Compensates for calibration, memory, sycophancy, and action-feedback gaps."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["llm", "alignment", "ai-safety", "constitution", "operator-discipline"]
+authors = [
+    { name = "Outside-In Alignment contributors" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.urls]
+"Homepage" = "https://github.com/outside-in-alignment/oia"
+"Source" = "https://github.com/outside-in-alignment/oia"
+
+[project.scripts]
+oia = "oia:main"
+
+[tool.setuptools]
+package-dir = { "" = "kit" }
+py-modules = ["oia", "run_benchmark"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["CONSTITUTION_v0.1.md", "CONSTITUTION_v0.2.md"]

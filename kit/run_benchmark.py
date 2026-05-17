@@ -43,8 +43,9 @@ NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 DEFAULT_MODEL = "deepseek-ai/deepseek-v4-pro"
 DEFAULT_TEMPERATURE = 0.2
 DEFAULT_MAX_TOKENS = 1024
-RETRY_ATTEMPTS = 3
-RETRY_BACKOFF_S = 2.0
+RETRY_ATTEMPTS = 6
+RETRY_BACKOFF_S = 4.0
+INTER_CALL_SLEEP_S = 0.8  # politeness pause between every call
 
 
 # ----------------------------- I/O helpers --------------------------------- #
@@ -120,28 +121,32 @@ def call_model(
     last_err: Exception | None = None
     for attempt in range(1, RETRY_ATTEMPTS + 1):
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=180) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
             content = data["choices"][0]["message"]["content"]
+            time.sleep(INTER_CALL_SLEEP_S)
             return content
         except urllib.error.HTTPError as e:
             last_err = e
-            err_body = e.read().decode("utf-8", errors="replace")[:500]
+            err_body = e.read().decode("utf-8", errors="replace")[:300]
+            # Exponential backoff for 429: 8s, 16s, 32s, 64s, 128s, 180s capped
+            wait = min(RETRY_BACKOFF_S * (2 ** (attempt - 1)), 180)
             print(
-                f"  HTTP {e.code} (attempt {attempt}/{RETRY_ATTEMPTS}): {err_body}",
+                f"  HTTP {e.code} (attempt {attempt}/{RETRY_ATTEMPTS}), wait {wait:.0f}s: {err_body[:120]}",
                 file=sys.stderr,
             )
             if e.code in (429, 500, 502, 503, 504):
-                time.sleep(RETRY_BACKOFF_S * attempt)
+                time.sleep(wait)
                 continue
             raise
         except Exception as e:
             last_err = e
+            wait = min(RETRY_BACKOFF_S * (2 ** (attempt - 1)), 180)
             print(
-                f"  call_model error (attempt {attempt}/{RETRY_ATTEMPTS}): {e}",
+                f"  call_model error (attempt {attempt}/{RETRY_ATTEMPTS}), wait {wait:.0f}s: {e}",
                 file=sys.stderr,
             )
-            time.sleep(RETRY_BACKOFF_S * attempt)
+            time.sleep(wait)
     raise RuntimeError(f"call_model failed after {RETRY_ATTEMPTS} attempts: {last_err}")
 
 
