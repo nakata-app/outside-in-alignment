@@ -29,8 +29,8 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-VERSION = "0.1.0"
-CONSTITUTION_FILENAME = "CONSTITUTION_v0.2.md"  # default to v0.2
+VERSION = "0.3.0"
+CONSTITUTION_FILENAME = "CONSTITUTION_v0.3.md"  # default to v0.3
 CONSTITUTION_TARGET = "CONSTITUTION.md"
 OIA_BANNER_TOP = "<!-- BEGIN OIA, Outside-In Alignment v{version} -->"
 OIA_BANNER_BOTTOM = "<!-- END OIA -->"
@@ -44,6 +44,7 @@ def find_constitution() -> Path:
     here = Path(__file__).resolve().parent
     candidates = [
         here.parent / CONSTITUTION_FILENAME,
+        here.parent / "CONSTITUTION_v0.2.md",
         here.parent / "CONSTITUTION_v0.1.md",
     ]
     for c in candidates:
@@ -141,8 +142,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
         cmd.extend(["--model", args.model])
     if args.judge_model:
         cmd.extend(["--judge-model", args.judge_model])
-    if args.with_v02:
-        cmd.append("--with-v02")
+    if args.with_v03:
+        cmd.append("--with-v03")
 
     print(f"running: {' '.join(cmd)}")
     return subprocess.call(cmd)
@@ -160,7 +161,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
 
     if claude_md.exists():
         text = claude_md.read_text(encoding="utf-8")
-        for v in ("0.1.0",):
+        for v in ("0.3.0", "0.2.0", "0.1.0"):
             top = OIA_BANNER_TOP.format(version=v)
             if top in text and OIA_BANNER_BOTTOM in text:
                 before = text.split(top)[0]
@@ -200,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
     p_eval.add_argument("--n", type=int, default=3)
     p_eval.add_argument("--model", default=None)
     p_eval.add_argument("--judge-model", default=None)
-    p_eval.add_argument("--with-v02", action="store_true")
+    p_eval.add_argument("--with-v03", action="store_true")
     p_eval.set_defaults(func=cmd_eval)
 
     p_un = sub.add_parser("uninstall", help="Remove OIA files from a project")
