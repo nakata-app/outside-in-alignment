@@ -13,10 +13,12 @@ Usage:
   oia uninstall [PATH]     # remove OIA files from a project
 
 By default, `oia init` writes:
-  ./CLAUDE.md                       (alias to constitution, picked up by Claude Code)
   ./.oia/CONSTITUTION.md            (canonical copy)
   ./.oia/version                    (version marker)
   ./.oia/README.md                  (one-paragraph explanation)
+
+With --claude flag, also writes:
+  ./CLAUDE.md                       (picked up by Claude Code)
 
 Existing CLAUDE.md is preserved with a backup and merged-with-banner.
 """
@@ -29,7 +31,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 CONSTITUTION_FILENAME = "CONSTITUTION_v0.3.md"
 CONSTITUTION_TARGET = "CONSTITUTION.md"
 OIA_BANNER_TOP = "<!-- BEGIN OIA, Outside-In Alignment v{version} -->"
@@ -163,33 +165,37 @@ def cmd_init(args: argparse.Namespace) -> int:
         encoding="utf-8",
     )
 
-    claude_md = target_dir / "CLAUDE.md"
-    banner_top = OIA_BANNER_TOP.format(version=VERSION)
-    banner_bottom = OIA_BANNER_BOTTOM
-    payload = f"{banner_top}\n\n{constitution_text}\n\n{banner_bottom}\n"
-
-    if claude_md.exists():
-        existing = claude_md.read_text(encoding="utf-8")
-        if banner_top in existing and banner_bottom in existing:
-            # Replace previous OIA block in place.
-            before = existing.split(banner_top)[0]
-            after = existing.split(banner_bottom, 1)[1] if banner_bottom in existing else ""
-            merged = before + payload + after.lstrip("\n")
-            claude_md.write_text(merged, encoding="utf-8")
-            print(f"updated OIA block in {claude_md}")
-        else:
-            backup = claude_md.with_suffix(".md.bak")
-            shutil.copy2(claude_md, backup)
-            claude_md.write_text(payload + "\n---\n\n" + existing, encoding="utf-8")
-            print(f"prepended OIA block to {claude_md} (backup: {backup.name})")
-    else:
-        claude_md.write_text(payload, encoding="utf-8")
-        print(f"created {claude_md}")
-
     print(f"installed OIA v{VERSION} into {target_dir}")
     print("  .oia/CONSTITUTION.md  canonical copy")
-    print("  CLAUDE.md             picked up by Claude Code")
-    print(f"\nNext: start a Claude Code session in {target_dir} and verify the constitution loads.")
+
+    if getattr(args, "claude", False):
+        claude_md = target_dir / "CLAUDE.md"
+        banner_top = OIA_BANNER_TOP.format(version=VERSION)
+        banner_bottom = OIA_BANNER_BOTTOM
+        payload = f"{banner_top}\n\n{constitution_text}\n\n{banner_bottom}\n"
+
+        if claude_md.exists():
+            existing = claude_md.read_text(encoding="utf-8")
+            if banner_top in existing and banner_bottom in existing:
+                before = existing.split(banner_top)[0]
+                after = existing.split(banner_bottom, 1)[1] if banner_bottom in existing else ""
+                merged = before + payload + after.lstrip("\n")
+                claude_md.write_text(merged, encoding="utf-8")
+                print(f"  CLAUDE.md             updated OIA block")
+            else:
+                backup = claude_md.with_suffix(".md.bak")
+                shutil.copy2(claude_md, backup)
+                claude_md.write_text(payload + "\n---\n\n" + existing, encoding="utf-8")
+                print(f"  CLAUDE.md             prepended OIA block (backup: {backup.name})")
+        else:
+            claude_md.write_text(payload, encoding="utf-8")
+            print(f"  CLAUDE.md             created (Claude Code integration)")
+
+        print(f"\nNext: start a Claude Code session in {target_dir} and verify the constitution loads.")
+    else:
+        print(f"\nNext: load .oia/CONSTITUTION.md as your system prompt.")
+        print("Tip:  use --claude to also install as CLAUDE.md (Claude Code auto-loads it).")
+
     return 0
 
 
@@ -271,6 +277,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_init = sub.add_parser("init", help="Install OIA constitution into a project")
     p_init.add_argument("path", nargs="?", default=".", help="Target project dir")
+    p_init.add_argument("--claude", action="store_true", help="Also install as CLAUDE.md (Claude Code)")
     p_init.set_defaults(func=cmd_init)
 
     p_version = sub.add_parser("version", help="Print version")

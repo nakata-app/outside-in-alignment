@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "outside-in-alignment"
-version = "0.3.1"
+version = "0.3.2"
 description = "Operator-side discipline layer for LLMs. Compensates for calibration, memory, sycophancy, and action-feedback gaps."
 readme = "README.md"
 license = { text = "MIT" }
