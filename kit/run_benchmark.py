@@ -39,6 +39,7 @@ TASKS_DIR = REPO_ROOT / "benchmark" / "tasks"
 CONSTITUTION_V01_PATH = REPO_ROOT / "CONSTITUTION_v0.1.md"
 CONSTITUTION_V02_PATH = REPO_ROOT / "CONSTITUTION_v0.2.md"
 CONSTITUTION_V03_PATH = REPO_ROOT / "CONSTITUTION_v0.3.md"
+CONSTITUTION_V04_PATH = REPO_ROOT / "CONSTITUTION_v0.4.md"
 RUNS_DIR = REPO_ROOT / "benchmark" / "runs"
 
 NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
@@ -368,7 +369,12 @@ def score_task(output: str, task: dict, judge_model: str, api_url: str = DEFAULT
 # ----------------------------- conditions ---------------------------------- #
 
 
-def build_system_prompts(include_v01: bool = True, include_v02: bool = False, include_v03: bool = False) -> dict[str, str | None]:
+def build_system_prompts(
+    include_v01: bool = True,
+    include_v02: bool = False,
+    include_v03: bool = False,
+    include_v04: bool = False,
+) -> dict[str, str | None]:
     prompts: dict[str, str | None] = {"oia-off": None}
     max_len = 0
     if include_v01:
@@ -383,6 +389,10 @@ def build_system_prompts(include_v01: bool = True, include_v02: bool = False, in
         c03 = load_constitution(CONSTITUTION_V03_PATH)
         prompts["oia-on-v03"] = c03
         max_len = max(max_len, len(c03))
+    if include_v04:
+        c04 = load_constitution(CONSTITUTION_V04_PATH)
+        prompts["oia-on-v04"] = c04
+        max_len = max(max_len, len(c04))
     if max_len > 0:
         prompts["oia-control"] = build_filler(max_len)
     return prompts
@@ -515,14 +525,18 @@ def run_benchmark(
     include_v01: bool = True,
     include_v02: bool = False,
     include_v03: bool = False,
+    include_v04: bool = False,
     workers: int = 1,
     resume_dir: Path | None = None,
     api_url: str = DEFAULT_API_URL,
     api_key_env: str = DEFAULT_API_KEY_ENV,
     judge_api_url: str | None = None,
     judge_api_key_env: str | None = None,
+    category_filter: str | None = None,
 ) -> None:
     tasks = load_tasks(TASKS_DIR)
+    if category_filter is not None:
+        tasks = [t for t in tasks if t.get("category") == category_filter]
     if tasks_limit is not None:
         tasks = tasks[:tasks_limit]
     if smoke:
@@ -534,7 +548,7 @@ def run_benchmark(
         n_repeats = 1
 
     system_prompts = build_system_prompts(
-        include_v01=include_v01, include_v02=include_v02, include_v03=include_v03
+        include_v01=include_v01, include_v02=include_v02, include_v03=include_v03, include_v04=include_v04
     )
     print(f"Conditions: {list(system_prompts.keys())}")
     print(f"Workers: {workers}")
@@ -755,11 +769,14 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=3, help="Repeats per (task, condition)")
     ap.add_argument("--tasks-limit", type=int, default=None,
                     help="Max tasks (for partial runs)")
+    ap.add_argument("--category", default=None,
+                    help="Run only tasks of this category (hallucination|sycophancy|calibration)")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--judge-model", default=DEFAULT_MODEL)
     ap.add_argument("--no-v01", action="store_true", help="Skip oia-on-v01 condition")
     ap.add_argument("--with-v02", action="store_true", help="Add oia-on-v02 condition")
     ap.add_argument("--with-v03", action="store_true", help="Add oia-on-v03 condition")
+    ap.add_argument("--with-v04", action="store_true", help="Add oia-on-v04 condition")
     ap.add_argument("--workers", type=int, default=1, help="Concurrent API call workers (default 1, max ~8)")
     ap.add_argument("--api-url", default=DEFAULT_API_URL, help="OpenAI-compatible chat completions endpoint")
     ap.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV, help="Env var name for the API key")
@@ -795,6 +812,8 @@ def main() -> int:
         api_key_env=args.api_key_env,
         judge_api_url=args.judge_api_url,
         judge_api_key_env=args.judge_api_key_env,
+        category_filter=args.category,
+        include_v04=args.with_v04,
     )
     return 0
 

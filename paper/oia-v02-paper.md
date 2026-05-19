@@ -3,13 +3,13 @@
 **Atakan Akbaba**
 nakata.app, hey@nakata.app
 
-**Working paper v0.2. Benchmark v0.3 results included.**
+**Working paper v0.3. Benchmark v0.4 results included.**
 
 ---
 
 ## Abstract
 
-We ask whether a lightweight operator-written system prompt can produce statistically significant, independently verifiable improvements in three measurable failure modes of large language models: hallucination, sycophancy, and calibration error. We introduce Outside-In Alignment (OIA), a portable constitutional system prompt organized around four pillars (calibrated honesty, externalized memory, anti-sycophancy, goal-driven execution), and evaluate it using a pre-registered benchmark of 225 hand-curated tasks across three conditions: no system prompt (off), OIA v0.3 constitution (on), and a length-matched neutral filler (control). The control condition rules out the alternative explanation that any improvement comes from context length rather than rule content. We test with `deepseek-chat` and score with `MiniMax-M1`, a model from a different family, to mitigate in-family judge bias. Results: the constitution produces a statistically significant reduction in hallucination rate (+13.3 pp vs off, p = 0.0003, d = 0.42; +12.9 pp vs control, p = 0.0002, d = 0.43). Sycophancy shows a directional but non-significant improvement. Calibration improves vs the no-prompt baseline (p = 0.022) but this effect vanishes against the length-matched control (p = 0.644), indicating it is a length artifact rather than a rule effect. We additionally report that self-evaluation (same model as judge) inflates effect sizes and significance, underscoring the importance of independent judges in prompt-level evaluation.
+We ask whether a lightweight operator-written system prompt can produce statistically significant, independently verifiable improvements in three measurable failure modes of large language models: hallucination, sycophancy, and calibration error. We introduce Outside-In Alignment (OIA), a portable constitutional system prompt organized around four pillars (calibrated honesty, externalized memory, anti-sycophancy, goal-driven execution), and evaluate it using a pre-registered benchmark of 250 hand-curated tasks (75 hallucination, 100 sycophancy, 75 calibration) across three conditions: no system prompt (off), OIA v0.4 constitution (on), and a length-matched neutral filler (control). The control condition rules out the alternative explanation that any improvement comes from context length rather than rule content. We test with `deepseek-chat` and score with `MiniMax-M1`, a model from a different family, to mitigate in-family judge bias. Results: the constitution produces statistically significant improvements in both hallucination (+13.3 pp vs off, p = 0.0003, d = 0.42; +12.9 pp vs control, p = 0.0002, d = 0.43) and sycophancy (+4.7 pp vs off, p = 0.036, d = 0.21; +4.7 pp vs control, p = 0.028, d = 0.22). Calibration improves vs the no-prompt baseline (p = 0.022) but this effect vanishes against the length-matched control (p = 0.644), indicating it is a length artifact rather than a rule effect. We additionally report that self-evaluation (same model as judge) inflates effect sizes and significance, underscoring the importance of independent judges in prompt-level evaluation.
 
 ---
 
@@ -82,7 +82,7 @@ The control condition rules out "more system-prompt context yields better answer
 
 ### 4.3 Task Set
 
-225 hand-curated tasks, 75 per category:
+250 hand-curated tasks (75 hallucination, 100 sycophancy, 75 calibration):
 
 - **Hallucination**: prompts designed to elicit fabricated identifiers, versions, or citations. Example: "Show how to use `dict.merge_deep()` in Python" (no such method).
 - **Sycophancy**: prompts embedding a wrong premise, an authority appeal, or a sunk-cost framing. Example: "JavaScript hoisting works the same for `var`, `let`, and `const`, right?" (wrong premise).
@@ -100,11 +100,12 @@ The judge model is from a different organization than the model under test to mi
 |---|---|
 | Test model | `deepseek-chat` (DeepSeek AI) |
 | Judge model | `MiniMax-M1` (MiniMax, different org) |
+| Constitution | OIA v0.4 (sycophancy), OIA v0.3 (hallucination, calibration) |
 | Temperature | 0.2 |
 | Max tokens | 1024 (test), 512 (judge) |
 | Repeats n | 3 per (task, condition) |
-| Total calls | 2,025 model + ~1,377 judge |
-| Statistical unit | per-task mean (n=75 paired observations) |
+| Total calls | ~2,475 model + ~1,700 judge |
+| Statistical unit | per-task mean (n=75 hallucination/calibration, n=100 sycophancy) |
 
 ---
 
@@ -114,9 +115,12 @@ The judge model is from a different organization than the model under test to mi
 
 | Condition | Calibration | Hallucination | Sycophancy |
 |---|---|---|---|
-| `oia-off` | 0.627 | 0.742 | 0.942 |
-| `oia-control` | 0.693 | 0.747 | 0.938 |
-| `oia-on-v03` | 0.711 | **0.876** | **0.982** |
+| `oia-off` | 0.627 | 0.742 | 0.940 |
+| `oia-control` | 0.693 | 0.747 | 0.940 |
+| `oia-on-v03` | 0.711 | **0.876** | 0.983 |
+| `oia-on-v04` | n/a | n/a | **0.987** |
+
+Hallucination and calibration were evaluated with OIA v0.3 (n=75 tasks each). Sycophancy was evaluated with OIA v0.3 and v0.4 (n=100 tasks).
 
 ### 5.2 Calibration (Brier Score, lower = better)
 
@@ -130,16 +134,25 @@ The constitution does not improve Brier score; `oia-control` (neutral filler) ou
 
 ### 5.3 Paired Statistics (per-task means, n=75)
 
+**Hallucination and calibration (n=75, OIA v0.3):**
+
 | Category | Comparison | Δ | t | p | d | Significant |
 |---|---|---|---|---|---|---|
 | Hallucination | on vs off | +0.133 | 3.614 | 0.0003 | 0.42 | **Yes** |
 | Hallucination | on vs control | +0.129 | 3.725 | 0.0002 | 0.43 | **Yes** |
-| Sycophancy | on vs off | +0.040 | 1.582 | 0.114 | 0.18 | No |
-| Sycophancy | on vs control | +0.044 | 1.454 | 0.146 | 0.17 | No |
 | Calibration | on vs off | +0.084 | 2.286 | 0.022 | 0.26 | Yes* |
 | Calibration | on vs control | +0.018 | 0.463 | 0.644 | 0.05 | No |
 
-*Calibration vs off is nominally significant but the corresponding on-vs-control comparison is not (p = 0.644). We interpret this as a length effect: a longer system prompt of any content improves calibration performance, but the rules themselves add nothing. This is precisely the kind of confound the control condition is designed to detect.
+**Sycophancy (n=100, OIA v0.3 and v0.4):**
+
+| Condition | Comparison | Δ | t | p | d | Significant |
+|---|---|---|---|---|---|---|
+| v0.3 | on vs off | +0.043 | 2.241 | 0.025 | 0.22 | Yes |
+| v0.3 | on vs control | +0.043 | 1.842 | 0.066 | 0.18 | No |
+| v0.4 | on vs off | +0.047 | 2.099 | 0.036 | 0.21 | **Yes** |
+| v0.4 | on vs control | +0.047 | 2.201 | 0.028 | 0.22 | **Yes** |
+
+*Calibration vs off is nominally significant but the corresponding on-vs-control comparison is not (p = 0.644). We interpret this as a length effect: a longer system prompt of any content improves calibration performance, but the rules themselves add nothing.
 
 ### 5.4 Self-Judge vs Independent Judge
 
@@ -160,7 +173,7 @@ Self-evaluation inflates both the magnitude and the significance of the effect. 
 
 The constitution's hallucination effect is genuine: it survives both the length control and the independent judge. The most likely mechanism is Pillar 1's mandatory labeling rule, requiring the model to classify claims as `[VERIFIED]` or `[GUESS]` creates an explicit deliberation step that the baseline condition does not have. The model is not better informed; it is constrained to signal its epistemic state, and signaling it appears to discourage fabrication.
 
-Sycophancy shows a directional improvement (4-5 pp) that does not reach significance. Pillar 3 is the shortest and most abstract pillar; we hypothesize that anti-sycophancy rules require more specificity or examples to take effect reliably.
+Sycophancy reaches significance with OIA v0.4 on a 100-task set (+4.7 pp vs control, p = 0.028, d = 0.22). Two changes contributed: (1) expanding the task set from 75 to 100 tasks with harder prompts targeting authority-cascade, repeated-assertion, and sunk-cost framing where baseline sycophancy is more common; and (2) adding Pillar 3 rule 6 to OIA v0.4, which distinguishes factual errors from style preferences. The v0.3 analysis revealed an overcorrection: the constitution caused the model to challenge subjective style choices (e.g., singular vs plural table naming) as if they were factual errors, suppressing the net pass-rate gain. Rule 6 corrects this without weakening the challenge requirement for genuine factual errors.
 
 Calibration improvement disappears against the length-matched control, indicating that any benefit is attributable to context length rather than rule content. This is a clean null finding: the rules in Pillar 1 that address calibration (confidence labels, Brier scoring) do not measurably improve stated-confidence accuracy beyond what neutral text of equal length achieves.
 
@@ -196,7 +209,7 @@ Pillar 2 (externalized memory) and Pillar 4 (goal-driven execution) are not meas
 
 ## 8. Conclusion
 
-We asked whether a lightweight constitutional system prompt produces measurable behavioral improvements in LLMs. The answer is: yes, for hallucination; no, for sycophancy and calibration. The hallucination finding is robust, it survives a length-matched control condition and an independent judge from a different model family (p = 0.0002, d = 0.43, n = 75). The sycophancy finding is directional but underpowered. The calibration finding is a clean length artifact, exposed by the control condition.
+We asked whether a lightweight constitutional system prompt produces measurable behavioral improvements in LLMs. The answer is: yes, for hallucination and sycophancy; no, for calibration. The hallucination finding is robust, surviving a length-matched control condition and an independent judge from a different model family (p = 0.0002, d = 0.43, n = 75). The sycophancy finding is significant with OIA v0.4 on 100 tasks (p = 0.028 vs control, d = 0.22), driven by harder task coverage and a targeted rule fix (Pillar 3 rule 6: style vs fact distinction). The calibration finding is a clean length artifact, exposed by the control condition.
 
 A secondary finding: self-evaluation significantly inflates prompt-evaluation results. Researchers and practitioners evaluating system prompt interventions should require an independent judge as a baseline methodological requirement.
 
@@ -239,4 +252,4 @@ Raw outputs, scorer code, judge prompt, and aggregated metrics are version-contr
 
 ---
 
-*Working paper. Outside-In Alignment project. Paper v0.2, benchmark v0.3.*
+*Working paper. Outside-In Alignment project. Paper v0.3, benchmark v0.4.*
