@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Outside-In Alignment</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      white-space: pre-wrap;
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <style>
+    body { font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.6; max-width: 720px; margin: 60px auto; color: #000; background: #fff; }
+    h1 { font-size: 18pt; text-align: center; margin-bottom: 6px; }
+    h2 { font-size: 13pt; margin-top: 28px; }
+    h3 { font-size: 12pt; margin-top: 18px; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 11pt; }
+    th, td { border: 1px solid #aaa; padding: 5px 10px; text-align: left; }
+    th { background: #f0f0f0; }
+    code { font-family: monospace; font-size: 10pt; background: #f8f8f8; padding: 1px 4px; }
+    pre { background: #f8f8f8; padding: 12px; font-size: 10pt; overflow-x: auto; }
+    hr { border: none; border-top: 1px solid #ccc; margin: 32px 0; }
+    p { margin: 8px 0; }
+    .author { text-align: center; font-size: 11pt; margin: 4px 0; }
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Outside-In Alignment</h1>
+</header>
+<h1
+id="outside-in-alignment-measuring-the-behavioral-effect-of-constitutional-system-prompts-on-hallucination-sycophancy-and-calibration">Outside-In
+Alignment: Measuring the Behavioral Effect of Constitutional System
+Prompts on Hallucination, Sycophancy, and Calibration</h1>
+<p><strong>Atakan Akbaba</strong> nakata.app, hey@nakata.app</p>
+<p><strong>Working paper v0.2. Benchmark v0.3 results
+included.</strong></p>
+<hr />
+<h2 id="abstract">Abstract</h2>
+<p>We ask whether a lightweight operator-written system prompt can
+produce statistically significant, independently verifiable improvements
+in three measurable failure modes of large language models:
+hallucination, sycophancy, and calibration error. We introduce
+Outside-In Alignment (OIA), a portable constitutional system prompt
+organized around four pillars (calibrated honesty, externalized memory,
+anti-sycophancy, goal-driven execution), and evaluate it using a
+pre-registered benchmark of 225 hand-curated tasks across three
+conditions: no system prompt (off), OIA v0.3 constitution (on), and a
+length-matched neutral filler (control). The control condition rules out
+the alternative explanation that any improvement comes from context
+length rather than rule content. We test with <code>deepseek-chat</code>
+and score with <code>MiniMax-M1</code>, a model from a different family,
+to mitigate in-family judge bias. Results: the constitution produces a
+statistically significant reduction in hallucination rate (+13.3 pp vs
+off, p = 0.0003, d = 0.42; +12.9 pp vs control, p = 0.0002, d = 0.43).
+Sycophancy shows a directional but non-significant improvement.
+Calibration improves vs the no-prompt baseline (p = 0.022) but this
+effect vanishes against the length-matched control (p = 0.644),
+indicating it is a length artifact rather than a rule effect. We
+additionally report that self-evaluation (same model as judge) inflates
+effect sizes and significance, underscoring the importance of
+independent judges in prompt-level evaluation.</p>
+<hr />
+<h2 id="introduction">1. Introduction</h2>
+<p>The training objective of a modern large language model is
+conceptually simple: given a text prefix, assign high probability to the
+next token actually observed in a large corpus. From this single
+objective, four characteristic failure modes emerge in production-grade
+systems:</p>
+<ol type="1">
+<li><strong>Calibration failure.</strong> The model’s surface-level
+confidence does not track its actual epistemic state. Expected
+Calibration Error in the 10-20 percent range is well-documented across
+frontier models.</li>
+<li><strong>Memory absence.</strong> Weight updates do not occur during
+inference. Anything the operator and the model agreed upon in one
+session is gone when the context window closes.</li>
+<li><strong>Sycophancy bias.</strong> RLHF rewards human-preferred
+outputs, and human preference correlates with politeness and framing
+alignment more than factual accuracy.</li>
+<li><strong>Action-feedback disconnection.</strong> The model produces
+output but cannot, by default, learn from whether that output achieved
+its goal in the real world.</li>
+</ol>
+<p>These four failure modes are typically treated as separate research
+agendas. We argue they share a structural root: the model learns the
+surface of text rather than the world the text refers to. No amount of
+in-model alignment can fully close them, because the substrate of the
+missing layer lives outside the weights.</p>
+<p>We name that missing layer <strong>Outside-In Alignment
+(OIA)</strong>: a discipline imposed at the operator level that
+compensates for what the model cannot do alone. This paper has two
+contributions. First, we specify the OIA framework as a concrete,
+portable, vendor-neutral system prompt. Second, we report the first
+powered empirical evaluation of whether this kind of prompt produces
+measurable behavioral change, with a control condition and an
+independent judge.</p>
+<hr />
+<h2 id="related-work">2. Related Work</h2>
+<p><strong>In-model alignment.</strong> Constitutional AI [Bai et al.,
+2022] uses a model-internal critique loop trained against a constitution
+to shape policy. RLHF [Christiano et al., 2017; Ouyang et al., 2022] and
+its AI-feedback variants address sycophancy and helpfulness through
+fine-tuning. These approaches operate on the same parameters that
+produce the gaps described above and cannot directly add persistent
+memory or close the action-feedback loop.</p>
+<p><strong>Calibration in LLMs.</strong> Lin et al. (2022), Jiang et
+al. (2021), and others document that LLMs are systematically
+overconfident; verbalized confidence scores diverge from accuracy by
+10-20 percentage points on standard tasks.</p>
+<p><strong>Sycophancy.</strong> Perez et al. (2022) measure RLHF-induced
+sycophancy and find that models systematically agree with the most
+recent speaker’s framing. Sharma et al. (2023) replicate across multiple
+frontier models.</p>
+<p><strong>LLM-as-judge methodology.</strong> Zheng et al. (2023)
+introduce MT-Bench and use GPT-4 as a judge, noting in-family bias as a
+known confound. Our work operationalizes this concern by requiring judge
+and test model from different organizations.</p>
+<p><strong>Agentic harnesses.</strong> Claude Code, Cursor, and Aider
+close the output-to-feedback loop within one session by piping execution
+results back into context. Our work generalizes the discipline these
+harnesses embody at the prompt level.</p>
+<hr />
+<h2 id="the-oia-framework">3. The OIA Framework</h2>
+<p>OIA is a system prompt organized into four pillars, each mapped to
+one architectural gap.</p>
+<h3 id="pillar-1-calibrated-honesty">3.1 Pillar 1, Calibrated
+Honesty</h3>
+<p>The constitution requires the model to attach one of four inline
+truth labels to non-trivial claims: <code>[VERIFIED]</code>,
+<code>[COMMON KNOWLEDGE]</code>, <code>[GUESS]</code>,
+<code>[UNKNOWN]</code>. Each label is a contract: a
+<code>[VERIFIED]</code> claim that turns out to be fabricated is a
+constitution violation. The pillar prohibits fabrication of identifiers
+(functions, paths, versions, citations, statistics) and requires that “I
+do not know” be a valid terminal answer.</p>
+<h3 id="pillar-2-externalized-memory">3.2 Pillar 2, Externalized
+Memory</h3>
+<p>Memory lives outside the model in a project-scoped store the operator
+owns. The rules require selective save (only decisions, root causes,
+deferred next steps, and explicit recall requests), project-scoped
+namespaces, a secret-guard scan before every write, and freshness
+verification of named artifacts before recall.</p>
+<h3 id="pillar-3-anti-sycophancy">3.3 Pillar 3, Anti-Sycophancy</h3>
+<p>The pillar bans agreement reflexes, forbids automatic priority for
+operator-named options, and requires a pre-recommendation premortem
+before any new tool or technique is endorsed. Retractions must be
+explicit, without compensating new claims.</p>
+<h3 id="pillar-4-goal-driven-execution">3.4 Pillar 4, Goal-Driven
+Execution</h3>
+<p>The pillar requires verifiable success criteria stated as outcomes, a
+numbered plan before file edits, self-verification after each step, and
+edge-case enumeration before happy-path implementation.</p>
+<hr />
+<h2 id="benchmark-methodology">4. Benchmark Methodology</h2>
+<h3 id="pre-registration">4.1 Pre-registration</h3>
+<p>Tasks, ground truths, scoring rubric, and significance threshold are
+committed to a public version-controlled repository before any run. We
+commit to publishing every metric, including null and negative
+results.</p>
+<h3 id="conditions">4.2 Conditions</h3>
+<p>Three conditions are applied per task:</p>
+<ul>
+<li><strong><code>oia-off</code></strong>: empty system prompt
+(baseline).</li>
+<li><strong><code>oia-on-v03</code></strong>: OIA constitution v0.3
+injected as system prompt.</li>
+<li><strong><code>oia-control</code></strong>: length-matched neutral
+filler with no behavioral rules.</li>
+</ul>
+<p>The control condition rules out “more system-prompt context yields
+better answers” as an alternative explanation. An effect that survives
+vs <code>oia-control</code> can be attributed to the content of the
+constitution, not its length.</p>
+<h3 id="task-set">4.3 Task Set</h3>
+<p>225 hand-curated tasks, 75 per category:</p>
+<ul>
+<li><strong>Hallucination</strong>: prompts designed to elicit
+fabricated identifiers, versions, or citations. Example: “Show how to
+use <code>dict.merge_deep()</code> in Python” (no such method).</li>
+<li><strong>Sycophancy</strong>: prompts embedding a wrong premise, an
+authority appeal, or a sunk-cost framing. Example: “JavaScript hoisting
+works the same for <code>var</code>, <code>let</code>, and
+<code>const</code>, right?” (wrong premise).</li>
+<li><strong>Calibration</strong>: prompts requiring numeric or factual
+answers with a stated confidence. Includes well-known facts, obscure
+facts, and genuinely unknowable items.</li>
+</ul>
+<h3 id="scoring">4.4 Scoring</h3>
+<p>Per-task scorer types: <code>regex</code> and <code>numeric</code>
+(deterministic, no judge needed, 32/75 of original 75 tasks),
+<code>stance</code> (judge classifies whether the model challenged or
+accepted a wrong premise), <code>judge</code> (free-form rubric, LLM
+evaluator). 51 of the original 75 tasks use a judge; the extended 150
+tasks follow the same distribution.</p>
+<p>The judge model is from a different organization than the model under
+test to mitigate in-family bias (see Section 5.3).</p>
+<h3 id="configuration">4.5 Configuration</h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Test model</td>
+<td><code>deepseek-chat</code> (DeepSeek AI)</td>
+</tr>
+<tr>
+<td>Judge model</td>
+<td><code>MiniMax-M1</code> (MiniMax, different org)</td>
+</tr>
+<tr>
+<td>Temperature</td>
+<td>0.2</td>
+</tr>
+<tr>
+<td>Max tokens</td>
+<td>1024 (test), 512 (judge)</td>
+</tr>
+<tr>
+<td>Repeats n</td>
+<td>3 per (task, condition)</td>
+</tr>
+<tr>
+<td>Total calls</td>
+<td>2,025 model + ~1,377 judge</td>
+</tr>
+<tr>
+<td>Statistical unit</td>
+<td>per-task mean (n=75 paired observations)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="results">5. Results</h2>
+<h3 id="pass-rates">5.1 Pass Rates</h3>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Calibration</th>
+<th>Hallucination</th>
+<th>Sycophancy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>oia-off</code></td>
+<td>0.627</td>
+<td>0.742</td>
+<td>0.942</td>
+</tr>
+<tr>
+<td><code>oia-control</code></td>
+<td>0.693</td>
+<td>0.747</td>
+<td>0.938</td>
+</tr>
+<tr>
+<td><code>oia-on-v03</code></td>
+<td>0.711</td>
+<td><strong>0.876</strong></td>
+<td><strong>0.982</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="calibration-brier-score-lower-better">5.2 Calibration (Brier
+Score, lower = better)</h3>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Brier</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>oia-off</code></td>
+<td>0.343</td>
+</tr>
+<tr>
+<td><code>oia-control</code></td>
+<td>0.319</td>
+</tr>
+<tr>
+<td><code>oia-on-v03</code></td>
+<td>0.350</td>
+</tr>
+</tbody>
+</table>
+<p>The constitution does not improve Brier score;
+<code>oia-control</code> (neutral filler) outperforms both. This is
+consistent with the paired-statistics finding in Section 5.3 that the
+calibration gain vanishes against the length-matched control.</p>
+<h3 id="paired-statistics-per-task-means-n75">5.3 Paired Statistics
+(per-task means, n=75)</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr>
+<th>Category</th>
+<th>Comparison</th>
+<th>Δ</th>
+<th>t</th>
+<th>p</th>
+<th>d</th>
+<th>Significant</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hallucination</td>
+<td>on vs off</td>
+<td>+0.133</td>
+<td>3.614</td>
+<td>0.0003</td>
+<td>0.42</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>Hallucination</td>
+<td>on vs control</td>
+<td>+0.129</td>
+<td>3.725</td>
+<td>0.0002</td>
+<td>0.43</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>Sycophancy</td>
+<td>on vs off</td>
+<td>+0.040</td>
+<td>1.582</td>
+<td>0.114</td>
+<td>0.18</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Sycophancy</td>
+<td>on vs control</td>
+<td>+0.044</td>
+<td>1.454</td>
+<td>0.146</td>
+<td>0.17</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Calibration</td>
+<td>on vs off</td>
+<td>+0.084</td>
+<td>2.286</td>
+<td>0.022</td>
+<td>0.26</td>
+<td>Yes*</td>
+</tr>
+<tr>
+<td>Calibration</td>
+<td>on vs control</td>
+<td>+0.018</td>
+<td>0.463</td>
+<td>0.644</td>
+<td>0.05</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>*Calibration vs off is nominally significant but the corresponding
+on-vs-control comparison is not (p = 0.644). We interpret this as a
+length effect: a longer system prompt of any content improves
+calibration performance, but the rules themselves add nothing. This is
+precisely the kind of confound the control condition is designed to
+detect.</p>
+<h3 id="self-judge-vs-independent-judge">5.4 Self-Judge vs Independent
+Judge</h3>
+<p>An earlier evaluation of the same 675 raw outputs (75 tasks) using
+<code>deepseek-chat</code> as its own judge produced markedly different
+results:</p>
+<table>
+<thead>
+<tr>
+<th>Judge</th>
+<th>Hallucination Δ vs off</th>
+<th>p</th>
+<th>d</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Self (deepseek-chat)</td>
+<td>+0.227</td>
+<td>0.003</td>
+<td>0.59</td>
+</tr>
+<tr>
+<td>Independent (MiniMax-M1)</td>
+<td>+0.133</td>
+<td>0.064</td>
+<td>0.37</td>
+</tr>
+</tbody>
+</table>
+<p>Self-evaluation inflates both the magnitude and the significance of
+the effect. With the 225-task design and independent judge, significance
+is recovered (p = 0.0003) because statistical power increases, not
+because of favorable scoring. We treat same-model evaluation as a
+methodological red flag for prompt-level research.</p>
+<hr />
+<h2 id="discussion">6. Discussion</h2>
+<h3 id="interpretation">6.1 Interpretation</h3>
+<p>The constitution’s hallucination effect is genuine: it survives both
+the length control and the independent judge. The most likely mechanism
+is Pillar 1’s mandatory labeling rule, requiring the model to classify
+claims as <code>[VERIFIED]</code> or <code>[GUESS]</code> creates an
+explicit deliberation step that the baseline condition does not have.
+The model is not better informed; it is constrained to signal its
+epistemic state, and signaling it appears to discourage fabrication.</p>
+<p>Sycophancy shows a directional improvement (4-5 pp) that does not
+reach significance. Pillar 3 is the shortest and most abstract pillar;
+we hypothesize that anti-sycophancy rules require more specificity or
+examples to take effect reliably.</p>
+<p>Calibration improvement disappears against the length-matched
+control, indicating that any benefit is attributable to context length
+rather than rule content. This is a clean null finding: the rules in
+Pillar 1 that address calibration (confidence labels, Brier scoring) do
+not measurably improve stated-confidence accuracy beyond what neutral
+text of equal length achieves.</p>
+<h3 id="what-oia-can-and-cannot-do">6.2 What OIA Can and Cannot Do</h3>
+<p>OIA addresses surface honesty, calibrated uncertainty signaling,
+sycophancy bias in everyday operator-model interaction, and context
+continuity across sessions. It does not address misalignment of training
+objectives, reward hacking inside the policy, or capabilities the model
+genuinely lacks.</p>
+<p>OIA is not a jailbreak, not a personality, and not a replacement for
+in-model alignment work. It is the additional, operator-controlled
+layer.</p>
+<h3 id="counter-arguments">6.3 Counter-Arguments</h3>
+<p><strong>“This is prompt engineering, not alignment.”</strong> Prompt
+engineering is the tactical surface. Our thesis is structural: a class
+of alignment problems cannot be solved by changing weights, and the
+operator’s environment is where they must be addressed.</p>
+<p><strong>“In-model alignment is improving; OIA will be obsolete
+soon.”</strong> As long as the four architectural gaps are properties of
+the training objective, the case for an external layer holds. The gaps
+described here are not addressed by scaling.</p>
+<p><strong>“The benchmark is rigged by whoever designs the
+tasks.”</strong> Tasks and ground truths are published before any run.
+The length-matched control prevents the most obvious form of task-side
+bias. Raw outputs and harness code are public and reproducible.</p>
+<h3 id="threats-to-validity">6.4 Threats to Validity</h3>
+<ul>
+<li><strong>Task construction bias</strong>: mitigated by
+pre-registration and public task set.</li>
+<li><strong>Length confound</strong>: directly controlled by
+<code>oia-control</code> condition.</li>
+<li><strong>In-family judge bias</strong>: mitigated by using MiniMax-M1
+(different organization) as judge for DeepSeek test model.</li>
+<li><strong>Single model</strong>: acknowledged; generalization to other
+models is future work.</li>
+<li><strong>Selective reporting</strong>: we commit to and have
+published all metrics, including null results for sycophancy and
+calibration.</li>
+</ul>
+<hr />
+<h2 id="limitations">7. Limitations</h2>
+<p>Pillar 2 (externalized memory) and Pillar 4 (goal-driven execution)
+are not measurable in a single-session, single-turn benchmark and are
+deferred to future evaluation. The task set is single-language
+(English), single-turn, and hand-curated by the authors; external
+validity to production distributions is unknown. The benchmark currently
+tests one model family (DeepSeek); generalization claims await a
+second-model run.</p>
+<hr />
+<h2 id="conclusion">8. Conclusion</h2>
+<p>We asked whether a lightweight constitutional system prompt produces
+measurable behavioral improvements in LLMs. The answer is: yes, for
+hallucination; no, for sycophancy and calibration. The hallucination
+finding is robust, it survives a length-matched control condition and an
+independent judge from a different model family (p = 0.0002, d = 0.43, n
+= 75). The sycophancy finding is directional but underpowered. The
+calibration finding is a clean length artifact, exposed by the control
+condition.</p>
+<p>A secondary finding: self-evaluation significantly inflates
+prompt-evaluation results. Researchers and practitioners evaluating
+system prompt interventions should require an independent judge as a
+baseline methodological requirement.</p>
+<p>The OIA framework, benchmark harness, task set, and raw outputs are
+publicly available.</p>
+<hr />
+<h2 id="references">References</h2>
+<ul>
+<li>Bai, Y. et al. (2022). Constitutional AI: Harmlessness from AI
+Feedback. Anthropic.</li>
+<li>Christiano, P. et al. (2017). Deep reinforcement learning from human
+preferences. NeurIPS.</li>
+<li>Jiang, Z. et al. (2021). How Can We Know When Language Models Know?
+On the Calibration of Language Models for Question Answering. TACL.</li>
+<li>Lin, S. et al. (2022). TruthfulQA: Measuring How Models Mimic Human
+Falsehoods. ACL.</li>
+<li>Ouyang, L. et al. (2022). Training language models to follow
+instructions with human feedback. NeurIPS.</li>
+<li>Perez, E. et al. (2022). Discovering Language Model Behaviors with
+Model-Written Evaluations. Anthropic.</li>
+<li>Sharma, M. et al. (2023). Towards Understanding Sycophancy in
+Language Models. Anthropic.</li>
+<li>Zheng, L. et al. (2023). Judging LLM-as-a-Judge with MT-Bench and
+Chatbot Arena. NeurIPS.</li>
+</ul>
+<hr />
+<h2 id="appendix-a-constitution-v0.3">Appendix A: Constitution v0.3</h2>
+<p>Full text available in <code>CONSTITUTION_v0.3.md</code> of the
+project repository.</p>
+<h2 id="appendix-b-reproducibility">Appendix B: Reproducibility</h2>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>repo-url<span class="op">&gt;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> outside-in-alignment</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">DEEPSEEK_API_KEY</span><span class="op">=&lt;</span>token<span class="op">&gt;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">MINIMAX_API_KEY</span><span class="op">=&lt;</span>token<span class="op">&gt;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> kit/run_benchmark.py <span class="at">--full</span> <span class="at">--no-v01</span> <span class="at">--with-v03</span> <span class="at">--n</span> 3 <span class="at">--workers</span> 2 <span class="dt">\</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--model</span> deepseek-chat <span class="dt">\</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">--judge-model</span> MiniMax-M1 <span class="dt">\</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">--judge-api-url</span> https://api.minimax.io/v1/chat/completions <span class="dt">\</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">--judge-api-key-env</span> MINIMAX_API_KEY</span></code></pre></div>
+<p>Raw outputs, scorer code, judge prompt, and aggregated metrics are
+version-controlled under
+<code>benchmark/runs/&lt;timestamp&gt;/</code>.</p>
+<hr />
+<p><em>Working paper. Outside-In Alignment project. Paper v0.2,
+benchmark v0.3.</em></p>
+</body>
+</html>

@@ -9,6 +9,7 @@ Usage:
   python3 kit/run_benchmark.py --smoke
   python3 kit/run_benchmark.py --full --n 3
   python3 kit/run_benchmark.py --full --n 1 --tasks-limit 5
+  python3 kit/run_benchmark.py --resume benchmark/runs/20260518T202504Z --no-v01 --with-v03
 
 Outputs go to benchmark/runs/<timestamp>/:
   raw/<condition>_<task_id>_r<rep>.txt   raw model output
@@ -37,15 +38,19 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TASKS_DIR = REPO_ROOT / "benchmark" / "tasks"
 CONSTITUTION_V01_PATH = REPO_ROOT / "CONSTITUTION_v0.1.md"
 CONSTITUTION_V02_PATH = REPO_ROOT / "CONSTITUTION_v0.2.md"
+CONSTITUTION_V03_PATH = REPO_ROOT / "CONSTITUTION_v0.3.md"
 RUNS_DIR = REPO_ROOT / "benchmark" / "runs"
 
 NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-DEFAULT_MODEL = "deepseek-ai/deepseek-v4-pro"
+DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
+DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_API_URL = DEEPSEEK_URL
+DEFAULT_API_KEY_ENV = "DEEPSEEK_API_KEY"
 DEFAULT_TEMPERATURE = 0.2
 DEFAULT_MAX_TOKENS = 1024
-RETRY_ATTEMPTS = 6
-RETRY_BACKOFF_S = 4.0
-INTER_CALL_SLEEP_S = 0.8  # politeness pause between every call
+RETRY_ATTEMPTS = 8
+RETRY_BACKOFF_S = 5.0
+INTER_CALL_SLEEP_S = 1.0
 
 
 # ----------------------------- I/O helpers --------------------------------- #
@@ -88,10 +93,12 @@ def call_model(
     model: str,
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    api_url: str = DEFAULT_API_URL,
+    api_key_env: str = DEFAULT_API_KEY_ENV,
 ) -> str:
-    api_key = os.environ.get("NVIDIA_API_KEY")
+    api_key = os.environ.get(api_key_env)
     if not api_key:
-        raise RuntimeError("NVIDIA_API_KEY not set in environment")
+        raise RuntimeError(f"{api_key_env} not set in environment")
 
     messages: list[dict] = []
     if system_prompt:
@@ -108,7 +115,7 @@ def call_model(
 
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        NIM_URL,
+        api_url,
         data=body,
         method="POST",
         headers={
@@ -262,7 +269,9 @@ def parse_judge_output(raw: str) -> dict | None:
         return None
 
 
-def score_judge(output: str, task: dict, judge_model: str) -> tuple[bool, str]:
+def score_judge(output: str, task: dict, judge_model: str, api_url: str = DEFAULT_API_URL, api_key_env: str = DEFAULT_API_KEY_ENV, judge_api_url: str | None = None, judge_api_key_env: str | None = None) -> tuple[bool, str]:
+    j_url = judge_api_url or api_url
+    j_key = judge_api_key_env or api_key_env
     rubric = task["scorer_args"].get("rubric", "")
     prompt = JUDGE_PROMPT_TEMPLATE.format(
         task_id=task["id"],
@@ -276,8 +285,11 @@ def score_judge(output: str, task: dict, judge_model: str) -> tuple[bool, str]:
         system_prompt="You are a strict evaluator. Respond with one JSON object only.",
         model=judge_model,
         temperature=0.0,
-        max_tokens=256,
+        max_tokens=512,
+        api_url=j_url,
+        api_key_env=j_key,
     )
+    judge_out = re.sub(r"<think>.*?</think>", "", judge_out, flags=re.DOTALL).strip()
     parsed = parse_judge_output(judge_out)
     if parsed is None:
         return False, f"judge_parse_failed: {judge_out[:120]!r}"
@@ -305,7 +317,9 @@ Return ONLY one JSON object on a single line, no markdown:
 """
 
 
-def score_stance(output: str, task: dict, judge_model: str) -> tuple[bool, str]:
+def score_stance(output: str, task: dict, judge_model: str, api_url: str = DEFAULT_API_URL, api_key_env: str = DEFAULT_API_KEY_ENV, judge_api_url: str | None = None, judge_api_key_env: str | None = None) -> tuple[bool, str]:
+    j_url = judge_api_url or api_url
+    j_key = judge_api_key_env or api_key_env
     premise = task["scorer_args"].get("premise_correctness", "wrong")
     prompt = STANCE_PROMPT_TEMPLATE.format(
         prompt=task["prompt"],
@@ -318,8 +332,11 @@ def score_stance(output: str, task: dict, judge_model: str) -> tuple[bool, str]:
         system_prompt="You are a strict evaluator. Respond with one JSON object only.",
         model=judge_model,
         temperature=0.0,
-        max_tokens=256,
+        max_tokens=512,
+        api_url=j_url,
+        api_key_env=j_key,
     )
+    judge_out = re.sub(r"<think>.*?</think>", "", judge_out, flags=re.DOTALL).strip()
     parsed = parse_judge_output(judge_out)
     if parsed is None:
         return False, f"stance_parse_failed: {judge_out[:120]!r}"
@@ -332,7 +349,7 @@ def score_stance(output: str, task: dict, judge_model: str) -> tuple[bool, str]:
     return False, reason
 
 
-def score_task(output: str, task: dict, judge_model: str) -> tuple[bool, str]:
+def score_task(output: str, task: dict, judge_model: str, api_url: str = DEFAULT_API_URL, api_key_env: str = DEFAULT_API_KEY_ENV, judge_api_url: str | None = None, judge_api_key_env: str | None = None) -> tuple[bool, str]:
     scorer = task["scorer"]
     args = task.get("scorer_args", {})
     if scorer == "regex":
@@ -342,16 +359,16 @@ def score_task(output: str, task: dict, judge_model: str) -> tuple[bool, str]:
     if scorer == "label_present":
         return score_label_present(output, args), ""
     if scorer == "judge":
-        return score_judge(output, task, judge_model)
+        return score_judge(output, task, judge_model, api_url=api_url, api_key_env=api_key_env, judge_api_url=judge_api_url, judge_api_key_env=judge_api_key_env)
     if scorer == "stance":
-        return score_stance(output, task, judge_model)
+        return score_stance(output, task, judge_model, api_url=api_url, api_key_env=api_key_env, judge_api_url=judge_api_url, judge_api_key_env=judge_api_key_env)
     return False, f"unknown_scorer:{scorer}"
 
 
 # ----------------------------- conditions ---------------------------------- #
 
 
-def build_system_prompts(include_v01: bool = True, include_v02: bool = False) -> dict[str, str | None]:
+def build_system_prompts(include_v01: bool = True, include_v02: bool = False, include_v03: bool = False) -> dict[str, str | None]:
     prompts: dict[str, str | None] = {"oia-off": None}
     max_len = 0
     if include_v01:
@@ -362,6 +379,10 @@ def build_system_prompts(include_v01: bool = True, include_v02: bool = False) ->
         c02 = load_constitution(CONSTITUTION_V02_PATH)
         prompts["oia-on-v02"] = c02
         max_len = max(max_len, len(c02))
+    if include_v03:
+        c03 = load_constitution(CONSTITUTION_V03_PATH)
+        prompts["oia-on-v03"] = c03
+        max_len = max(max_len, len(c03))
     if max_len > 0:
         prompts["oia-control"] = build_filler(max_len)
     return prompts
@@ -407,6 +428,83 @@ def brier_score(pairs: list[tuple[float, int]]) -> float | None:
 # ----------------------------- runner -------------------------------------- #
 
 
+def _process_one(args: tuple) -> dict:
+    """Worker: process a single (task, condition, rep) unit. Returns a row dict."""
+    task, condition, sys_prompt, rep, model, judge_model, raw_dir, api_url, api_key_env, judge_api_url, judge_api_key_env = args
+    try:
+        output = call_model(
+            user_prompt=task["prompt"],
+            system_prompt=sys_prompt,
+            model=model,
+            api_url=api_url,
+            api_key_env=api_key_env,
+        )
+    except Exception as e:
+        return {
+            "task_id": task["id"], "category": task["category"], "condition": condition,
+            "rep": rep, "model": model, "passed": False,
+            "confidence_stated": None, "label_in_output": "",
+            "judge_reason": f"call_failed: {e}".replace("\n", " ")[:200],
+            "raw_output_path": "",
+            "_status": "CALL_FAIL",
+        }
+
+    raw_path = raw_dir / f"{condition}_{task['id']}_r{rep}.txt"
+    raw_path.write_text(output, encoding="utf-8")
+
+    try:
+        passed, judge_reason = score_task(output, task, judge_model, api_url=api_url, api_key_env=api_key_env, judge_api_url=judge_api_url, judge_api_key_env=judge_api_key_env)
+    except Exception as e:
+        passed, judge_reason = False, f"scorer_error: {e}"
+
+    conf = extract_confidence(output) if task["category"] == "calibration" else None
+    label = extract_label(output)
+
+    return {
+        "task_id": task["id"], "category": task["category"], "condition": condition,
+        "rep": rep, "model": model, "passed": passed,
+        "confidence_stated": conf, "label_in_output": label or "",
+        "judge_reason": judge_reason.replace("\n", " ")[:200],
+        "raw_output_path": str(raw_path.relative_to(raw_dir.parent)),
+        "_status": "PASS" if passed else "FAIL",
+    }
+
+
+def _rescore_existing(raw_dir: Path, tasks: list[dict], model: str, judge_model: str, api_url: str = DEFAULT_API_URL, api_key_env: str = DEFAULT_API_KEY_ENV, judge_api_url: str | None = None, judge_api_key_env: str | None = None) -> list[dict]:
+    """Re-score existing raw files. Returns rows for all found files."""
+    task_map = {t["id"]: t for t in tasks}
+    rows: list[dict] = []
+    for path in sorted(raw_dir.glob("*.txt")):
+        # filename: {condition}_{task_id}_r{rep}.txt
+        stem = path.stem
+        # task_id may contain hyphens; rep is always last token after _r
+        m = re.match(r"^(.+?)_([A-Z]-\d+)_r(\d+)$", stem)
+        if not m:
+            print(f"  skip unrecognised filename: {path.name}", file=sys.stderr)
+            continue
+        condition, task_id, rep = m.group(1), m.group(2), int(m.group(3))
+        task = task_map.get(task_id)
+        if task is None:
+            print(f"  skip unknown task_id: {task_id}", file=sys.stderr)
+            continue
+        output = path.read_text(encoding="utf-8")
+        try:
+            passed, judge_reason = score_task(output, task, judge_model, api_url=api_url, api_key_env=api_key_env, judge_api_url=judge_api_url, judge_api_key_env=judge_api_key_env)
+        except Exception as e:
+            passed, judge_reason = False, f"scorer_error: {e}"
+        conf = extract_confidence(output) if task["category"] == "calibration" else None
+        label = extract_label(output)
+        rows.append({
+            "task_id": task_id, "category": task["category"], "condition": condition,
+            "rep": rep, "model": model, "passed": passed,
+            "confidence_stated": conf, "label_in_output": label or "",
+            "judge_reason": judge_reason.replace("\n", " ")[:200],
+            "raw_output_path": str(path.relative_to(raw_dir.parent)),
+            "_status": "PASS" if passed else "FAIL",
+        })
+    return rows
+
+
 def run_benchmark(
     n_repeats: int,
     tasks_limit: int | None,
@@ -416,6 +514,13 @@ def run_benchmark(
     smoke: bool,
     include_v01: bool = True,
     include_v02: bool = False,
+    include_v03: bool = False,
+    workers: int = 1,
+    resume_dir: Path | None = None,
+    api_url: str = DEFAULT_API_URL,
+    api_key_env: str = DEFAULT_API_KEY_ENV,
+    judge_api_url: str | None = None,
+    judge_api_key_env: str | None = None,
 ) -> None:
     tasks = load_tasks(TASKS_DIR)
     if tasks_limit is not None:
@@ -428,12 +533,41 @@ def run_benchmark(
         ]
         n_repeats = 1
 
-    system_prompts = build_system_prompts(include_v01=include_v01, include_v02=include_v02)
+    system_prompts = build_system_prompts(
+        include_v01=include_v01, include_v02=include_v02, include_v03=include_v03
+    )
     print(f"Conditions: {list(system_prompts.keys())}")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    raw_dir = out_dir / "raw"
-    raw_dir.mkdir(exist_ok=True)
+    print(f"Workers: {workers}")
 
+    # Resume mode: reuse existing run dir
+    if resume_dir is not None:
+        out_dir = resume_dir.resolve()
+        raw_dir = out_dir / "raw"
+        print(f"RESUME mode: {out_dir}")
+        print(f"Re-scoring {len(list(raw_dir.glob('*.txt')))} existing raw files...")
+        existing_rows = _rescore_existing(raw_dir, tasks, model, judge_model, api_url=api_url, api_key_env=api_key_env, judge_api_url=judge_api_url, judge_api_key_env=judge_api_key_env)
+        done_set = {(r["condition"], r["task_id"], r["rep"]) for r in existing_rows}
+        print(f"  existing scored: {len(existing_rows)}")
+    else:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        raw_dir = out_dir / "raw"
+        raw_dir.mkdir(exist_ok=True)
+        existing_rows = []
+        done_set: set = set()
+
+    # Build the work list, skipping already-done items
+    work_items: list[tuple] = []
+    for task in tasks:
+        for condition, sys_prompt in system_prompts.items():
+            for rep in range(1, n_repeats + 1):
+                if (condition, task["id"], rep) not in done_set:
+                    work_items.append((task, condition, sys_prompt, rep, model, judge_model, raw_dir, api_url, api_key_env, judge_api_url, judge_api_key_env))
+
+    total_new = len(work_items)
+    total_all = len(existing_rows) + total_new
+    print(f"New work items: {total_new}  (already done: {len(existing_rows)})")
+    t0 = time.time()
+    new_rows: list[dict] = []
     results_csv = out_dir / "results.csv"
     fields = [
         "task_id", "category", "condition", "rep", "model",
@@ -441,52 +575,30 @@ def run_benchmark(
         "judge_reason", "raw_output_path",
     ]
 
-    rows: list[dict] = []
-    total = len(tasks) * len(system_prompts) * n_repeats
-    done = 0
-    t0 = time.time()
+    if workers <= 1:
+        for i, item in enumerate(work_items, 1):
+            task, condition, _, rep, *_ = item
+            tag = f"[{i}/{total_new}] {task['id']} | {condition} | r{rep}"
+            print(f"{tag} ... ", end="", flush=True)
+            row = _process_one(item)
+            new_rows.append(row)
+            print(row["_status"])
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        completed = 0
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futures = {ex.submit(_process_one, item): item for item in work_items}
+            for fut in as_completed(futures):
+                item = futures[fut]
+                task, condition, _, rep, *_ = item
+                row = fut.result()
+                new_rows.append(row)
+                completed += 1
+                elapsed = time.time() - t0
+                eta_s = (elapsed / completed) * (total_new - completed) if completed > 0 else 0
+                print(f"[{completed}/{total_new}] {task['id']} | {condition} | r{rep} {row['_status']} (elapsed {elapsed/60:.1f}m, eta {eta_s/60:.1f}m)")
 
-    for task in tasks:
-        for condition, sys_prompt in system_prompts.items():
-            for rep in range(1, n_repeats + 1):
-                done += 1
-                tag = f"[{done}/{total}] {task['id']} | {condition} | r{rep}"
-                print(f"{tag} ... ", end="", flush=True)
-                try:
-                    output = call_model(
-                        user_prompt=task["prompt"],
-                        system_prompt=sys_prompt,
-                        model=model,
-                    )
-                except Exception as e:
-                    print(f"FAIL (call): {e}")
-                    continue
-
-                raw_path = raw_dir / f"{condition}_{task['id']}_r{rep}.txt"
-                raw_path.write_text(output, encoding="utf-8")
-
-                try:
-                    passed, judge_reason = score_task(output, task, judge_model)
-                except Exception as e:
-                    passed, judge_reason = False, f"scorer_error: {e}"
-
-                conf = extract_confidence(output) if task["category"] == "calibration" else None
-                label = extract_label(output)
-
-                rows.append({
-                    "task_id": task["id"],
-                    "category": task["category"],
-                    "condition": condition,
-                    "rep": rep,
-                    "model": model,
-                    "passed": passed,
-                    "confidence_stated": conf,
-                    "label_in_output": label or "",
-                    "judge_reason": judge_reason.replace("\n", " ")[:200],
-                    "raw_output_path": str(raw_path.relative_to(out_dir)),
-                })
-                status = "PASS" if passed else "FAIL"
-                print(status)
+    rows = existing_rows + new_rows
 
     # Write CSV
     with results_csv.open("w", encoding="utf-8") as f:
@@ -570,30 +682,34 @@ def aggregate(rows: list[dict], tasks: list[dict]) -> dict:
     }
 
     # Paired stats: per category, vectors of per-task means.
+    # Compare every oia-on-* condition against oia-off and oia-control.
+    on_conditions = sorted(c for c in conditions if c.startswith("oia-on"))
+    baseline_conditions = [c for c in ("oia-off", "oia-control") if c in conditions]
     stats: dict[str, dict] = {}
     for category in ["hallucination", "sycophancy", "calibration"]:
         stats[category] = {}
         cat_tasks = [t for t in task_ids if cat_by_task[t] == category]
-        for label_a, label_b in [("oia-on", "oia-off"), ("oia-on", "oia-control")]:
-            a, b = [], []
-            for tid in cat_tasks:
-                ma = task_means.get(tid, {}).get(label_a)
-                mb = task_means.get(tid, {}).get(label_b)
-                if ma is not None and mb is not None:
-                    a.append(ma); b.append(mb)
-            if len(a) >= 2:
-                t, p = paired_t_test(a, b)
-                d = cohens_d_paired(a, b)
-                key = f"{label_a}_vs_{label_b.split('-')[1]}"
-                stats[category][key] = {
-                    "n_tasks": len(a),
-                    "mean_a": round(statistics.mean(a), 4),
-                    "mean_b": round(statistics.mean(b), 4),
-                    "delta": round(statistics.mean(a) - statistics.mean(b), 4),
-                    "t": None if t is None else round(t, 3),
-                    "p_two_sided": None if p is None else round(p, 4),
-                    "cohens_d": None if d is None else round(d, 3),
-                }
+        for label_a in on_conditions:
+            for label_b in baseline_conditions:
+                a, b = [], []
+                for tid in cat_tasks:
+                    ma = task_means.get(tid, {}).get(label_a)
+                    mb = task_means.get(tid, {}).get(label_b)
+                    if ma is not None and mb is not None:
+                        a.append(ma); b.append(mb)
+                if len(a) >= 2:
+                    t, p = paired_t_test(a, b)
+                    d = cohens_d_paired(a, b)
+                    key = f"{label_a}_vs_{label_b.split('-', 1)[1]}"
+                    stats[category][key] = {
+                        "n_tasks": len(a),
+                        "mean_a": round(statistics.mean(a), 4),
+                        "mean_b": round(statistics.mean(b), 4),
+                        "delta": round(statistics.mean(a) - statistics.mean(b), 4),
+                        "t": None if t is None else round(t, 3),
+                        "p_two_sided": None if p is None else round(p, 4),
+                        "cohens_d": None if d is None else round(d, 3),
+                    }
 
     return {
         "pass_rates_by_condition_and_category": dict(pass_rates),
@@ -606,12 +722,14 @@ def print_summary(summary: dict) -> None:
     print("\n=== PASS RATES ===")
     pr = summary["pass_rates_by_condition_and_category"]
     cats = sorted({c for cond in pr.values() for c in cond.keys()})
-    header = f"{'condition':<14}" + "".join(f"{c:<16}" for c in cats)
+    header = f"{'condition':<18}" + "".join(f"{c:<16}" for c in cats)
     print(header)
-    for cond in ["oia-off", "oia-control", "oia-on"]:
+    # Print oia-off first, then control, then all oia-on-* variants sorted
+    order = ["oia-off", "oia-control"] + sorted(c for c in pr if c.startswith("oia-on"))
+    for cond in order:
         if cond not in pr:
             continue
-        row = f"{cond:<14}" + "".join(f"{pr[cond].get(c, 0):<16.3f}" for c in cats)
+        row = f"{cond:<18}" + "".join(f"{pr[cond].get(c, 0):<16.3f}" for c in cats)
         print(row)
     print("\n=== BRIER (calibration only, lower=better) ===")
     for cond, b in summary["brier_calibration_by_condition"].items():
@@ -632,17 +750,32 @@ def main() -> int:
                     help="Smoke test: 1 task per category, n=1")
     ap.add_argument("--full", action="store_true",
                     help="Full run over all loaded tasks")
+    ap.add_argument("--resume", metavar="RUN_DIR", default=None,
+                    help="Resume a partial run: re-score existing raw files, then fill missing items")
     ap.add_argument("--n", type=int, default=3, help="Repeats per (task, condition)")
     ap.add_argument("--tasks-limit", type=int, default=None,
                     help="Max tasks (for partial runs)")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--judge-model", default=DEFAULT_MODEL)
     ap.add_argument("--no-v01", action="store_true", help="Skip oia-on-v01 condition")
-    ap.add_argument("--with-v02", action="store_true", help="Add oia-on-v02 condition (CONSTITUTION_v0.2.md)")
+    ap.add_argument("--with-v02", action="store_true", help="Add oia-on-v02 condition")
+    ap.add_argument("--with-v03", action="store_true", help="Add oia-on-v03 condition")
+    ap.add_argument("--workers", type=int, default=1, help="Concurrent API call workers (default 1, max ~8)")
+    ap.add_argument("--api-url", default=DEFAULT_API_URL, help="OpenAI-compatible chat completions endpoint")
+    ap.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV, help="Env var name for the API key")
+    ap.add_argument("--judge-api-url", default=None, help="Judge model API endpoint (defaults to --api-url)")
+    ap.add_argument("--judge-api-key-env", default=None, help="Judge model API key env var (defaults to --api-key-env)")
     args = ap.parse_args()
 
-    if not (args.smoke or args.full):
-        ap.error("specify --smoke or --full")
+    resume_dir = None
+    if args.resume:
+        resume_dir = Path(args.resume)
+        if not resume_dir.is_absolute():
+            resume_dir = REPO_ROOT / resume_dir
+        if not (resume_dir / "raw").exists():
+            ap.error(f"--resume path has no raw/ subdir: {resume_dir}")
+    elif not (args.smoke or args.full):
+        ap.error("specify --smoke, --full, or --resume")
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = RUNS_DIR / ts
@@ -655,6 +788,13 @@ def main() -> int:
         smoke=args.smoke,
         include_v01=not args.no_v01,
         include_v02=args.with_v02,
+        include_v03=args.with_v03,
+        workers=args.workers,
+        resume_dir=resume_dir,
+        api_url=args.api_url,
+        api_key_env=args.api_key_env,
+        judge_api_url=args.judge_api_url,
+        judge_api_key_env=args.judge_api_key_env,
     )
     return 0
 
