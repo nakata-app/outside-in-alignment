@@ -163,7 +163,7 @@ oia eval --model your-model --api-url https://your-endpoint/v1/chat/completions
 - **Pillar 3 specificity**: anti-sycophancy rules need more concrete examples or worked cases to close the significance gap.
 - **Pillar 2 measurement**: cross-session memory, currently untested.
 - **Pillar 4 full agentic test**: with a verifier-in-the-loop harness.
-- **Zenodo DOI**: archival deposit in progress.
+- **Zenodo DOI**: https://doi.org/10.5281/zenodo.20298293
 
 ---
 

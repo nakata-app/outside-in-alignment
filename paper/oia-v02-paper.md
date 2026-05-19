@@ -252,4 +252,4 @@ Raw outputs, scorer code, judge prompt, and aggregated metrics are version-contr
 
 ---
 
-*Working paper. Outside-In Alignment project. Paper v0.3, benchmark v0.4.*
+*Working paper. Outside-In Alignment project. Paper v0.3, benchmark v0.4. DOI: https://doi.org/10.5281/zenodo.20298293*
